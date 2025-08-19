@@ -1,6 +1,7 @@
 import { CryptoAPI } from './crypto.js';
 import { DB } from './db.js';
 import { QR } from './qr.js';
+import { openModal, closeModal } from './modal.js'; // <-- Import the new modal manager
 
 const $ = sel => document.querySelector(sel);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
@@ -45,11 +46,7 @@ function setupListeners() {
     ['#qr-share-btn', 'click', onShareQR],
     ['#export-note-btn', 'click', onExportNoteHTML],
     ['#open-mindmap', 'click', openMindMap],
-    ['#mindmap-close', 'click', () => toggleModal('#mindmap-modal', false)],
-    ['#mindmap-refresh', 'click', renderMindMap],
-    ['#open-timeline', 'click', () => toggleModal('#timeline-modal', true)],
-    ['#timeline-close', 'click', () => toggleModal('#timeline-modal', false)],
-    ['#timeline-range', 'input', onTimelineZoom],
+    ['#open-timeline', 'click', openTimelineModal],
     ['#zen-toggle', 'click', () => {
       document.body.classList.toggle('zen');
       const el = document.getElementById('editor');
@@ -65,7 +62,6 @@ function setupListeners() {
     }],
     ['#export-vault-btn', 'click', exportVault],
     ['#import-vault-btn', 'click', importVault],
-    ['#close-qr', 'click', () => toggleModal('#qr-modal', false)],
     ['#clipboard-monitor', 'change', async (e) => {
       if (!e) return;
       // try to request permission gracefully
@@ -80,12 +76,10 @@ function setupListeners() {
               await localforage.setItem('clipboardMonitor', false);
               return;
             }
-            // if prompt or granted, proceed; some browsers still require user gesture to read
           }
           await localforage.setItem('clipboardMonitor', true);
           startClipboardMonitor();
         } catch (err) {
-          // Some browsers throw when querying clipboard permission — fallback to trying to read once
           try {
             await navigator.clipboard.readText();
             await localforage.setItem('clipboardMonitor', true);
@@ -104,12 +98,7 @@ function setupListeners() {
     }],
     ['#search', 'input', refreshNotesList],
     // Key modal wiring
-    ['#open-keys-btn', 'click', () => toggleModal('#keys-modal', true)],
-    ['#close-keys', 'click', () => toggleModal('#keys-modal', false)],
-    ['#generate-keys-btn', 'click', onGenerateKeys],
-    ['#export-keys-btn', 'click', onExportKeys],
-    ['#import-keys-btn', 'click', onImportKeys],
-    ['#delete-keys-btn', 'click', onDeleteKeys],
+    ['#open-keys-btn', 'click', openKeysModal],
     ['#rsa-export-inline', 'click', onExportKeys]
   ];
 
@@ -119,6 +108,77 @@ function setupListeners() {
   }
 }
 
+// ----- Modal migration -----
+
+function openKeysModal() {
+  openModal(`
+    <h3>RSA Key Management</h3>
+    <p id="key-status">No RSA keys found.</p>
+    <div class="key-actions" style="margin-bottom:1em">
+      <button id="generate-keys-btn" class="btn primary">Generate New Keys</button>
+      <button id="import-keys-btn" class="btn">Import Keys</button>
+      <button id="export-keys-btn" class="btn">Export Keys</button>
+      <button id="delete-keys-btn" class="btn danger">Delete Keys</button>
+    </div>
+  `);
+
+  // Attach modal-specific listeners after rendering
+  document.getElementById('generate-keys-btn')?.addEventListener('click', onGenerateKeys);
+  document.getElementById('import-keys-btn')?.addEventListener('click', onImportKeys);
+  document.getElementById('export-keys-btn')?.addEventListener('click', onExportKeys);
+  document.getElementById('delete-keys-btn')?.addEventListener('click', onDeleteKeys);
+
+  // Refresh banner/status inside modal
+  refreshRSAUI();
+}
+
+function openTimelineModal() {
+  openModal(`
+    <div class="timeline-toolbar" style="margin-bottom:1em">
+      <button class="close-btn btn">Close</button>
+      <input id="timeline-range" type="range" min="1" max="100" value="50" title="Zoom (not implemented)" />
+    </div>
+    <div id="timeline" class="timeline"></div>
+  `);
+  document.querySelector('.close-btn')?.addEventListener('click', () => closeModal());
+  const range = document.getElementById('timeline-range');
+  if (range) range.addEventListener('input', onTimelineZoom);
+  onTimelineZoom(); // Populate timeline
+}
+
+// Mindmap modal uses SVG, so just inject SVG and toolbar
+async function openMindMap() {
+  openModal(`
+    <div class="mindmap-toolbar" style="margin-bottom:1em">
+      <button class="close-btn btn">Close</button>
+      <button id="mindmap-refresh" class="btn">Refresh</button>
+    </div>
+    <svg id="mindmap" width="100%" height="400"></svg>
+  `);
+  document.querySelector('.close-btn')?.addEventListener('click', () => closeModal());
+  document.getElementById('mindmap-refresh')?.addEventListener('click', renderMindMap);
+  await renderMindMap();
+}
+
+// QR modal
+async function onShareQR() {
+  if (!currentNoteId) {
+    alert('Save a note first to share it.');
+    return;
+  }
+  const note = await DB.getNote(currentNoteId);
+  const payload = JSON.stringify({ meta: note.meta, content: note.content, title: note.title });
+  const b64 = btoa(unescape(encodeURIComponent(payload)));
+  openModal(`
+    <h3>Share Note via QR Code</h3>
+    <canvas id="qr-canvas"></canvas>
+  `);
+  const canvas = document.getElementById('qr-canvas');
+  if (canvas) QR.renderToCanvas(b64, canvas, 4);
+}
+
+// ----- End modal migration -----
+
 let clipboardInterval = null;
 function startClipboardMonitor() {
   if (clipboardInterval) return;
@@ -126,11 +186,9 @@ function startClipboardMonitor() {
     try {
       const text = await navigator.clipboard.readText();
       if (text && text.length > 20) {
-        // dedupe using lastClip
         const last = await localforage.getItem('savant:lastClip');
         if (last === text) return;
         await localforage.setItem('savant:lastClip', text);
-        // create quick note
         const id = uid('clip');
         const payload = {
           id,
@@ -298,110 +356,10 @@ async function deleteCurrentNote() {
   if (status) status.textContent = 'Deleted';
 }
 
-function toggleModal(sel, show) {
-  const el = document.querySelector(sel);
-  if (!el) return;
-  if (show) {
-    el.classList.remove('hidden');
-  } else el.classList.add('hidden');
-}
-
-async function onShareQR() {
-  if (!currentNoteId) {
-    alert('Save a note first to share it.');
-    return;
-  }
-  const note = await DB.getNote(currentNoteId);
-  const payload = JSON.stringify({ meta: note.meta, content: note.content, title: note.title });
-  const b64 = btoa(unescape(encodeURIComponent(payload)));
-  const canvas = $('#qr-canvas');
-  if (canvas) QR.renderToCanvas(b64, canvas, 4);
-  toggleModal('#qr-modal', true);
-}
-
-async function onExportNoteHTML() {
-  if (!currentNoteId) { alert('Save note first'); return; }
-  const note = await DB.getNote(currentNoteId);
-  const payload = encodeURIComponent(JSON.stringify(note));
-  const html = `<!doctype html>
-<html><head><meta charset="utf-8"><title>Encrypted Note: ${note.title}</title></head>
-<body style="font-family:system-ui;padding:20px;background:#fafafa;color:#111">
-  <h2>Encrypted Note: ${note.title}</h2>
-  <p>This file contains an encrypted note. To decrypt, enter passphrase (if any) and click Decrypt.</p>
-  <input id="pass" placeholder="Passphrase (optional)"/>
-  <button id="dec">Decrypt</button>
-  <pre id="out"></pre>
-  <script>
-    const pkg = decodeURIComponent("${payload}");
-    const data = JSON.parse(pkg);
-    async function decodeWithPass(pass){
-      try{
-        if (data.content.algo === 'AES-GCM' && data.content.salt){
-          const encText = Uint8Array.from(atob(data.content.ciphertext), c => c.charCodeAt(0));
-          const iv = Uint8Array.from(atob(data.content.iv), c => c.charCodeAt(0));
-          const salt = Uint8Array.from(atob(data.content.salt), c => c.charCodeAt(0));
-          const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), {name:'PBKDF2'}, false, ['deriveKey']);
-          const key = await crypto.subtle.deriveKey({ name:'PBKDF2', salt, iterations:200000, hash:'SHA-256'}, baseKey, {name:'AES-GCM', length:256}, false, ['decrypt']);
-          const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, encText);
-          document.getElementById('out').textContent = new TextDecoder().decode(plain);
-        } else if (data.content.plain) {
-          document.getElementById('out').textContent = data.content.plain;
-        } else {
-          document.getElementById('out').textContent = JSON.stringify(data.content, null, 2);
-        }
-      } catch(e) { document.getElementById('out').textContent = 'Failed to decrypt: '+e; }
-    }
-    document.getElementById('dec').addEventListener('click', () => decodeWithPass(document.getElementById('pass').value));
-  </script>
-</body></html>`;
-  const blob = new Blob([html], { type: 'text/html' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${note.title.replace(/\s+/g,'_')}.encrypted.html`;
-  a.click();
-}
-
-async function exportVault() {
-  const pass = prompt('Enter a password to encrypt the export (choose a strong password):');
-  if (!pass) return;
-  const blob = await DB.exportVaultBlob(pass);
-  const fileData = JSON.stringify(blob);
-  const blobFile = new Blob([fileData], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blobFile);
-  a.download = `savant_vault_export_${Date.now()}.json`;
-  a.click();
-}
-
-async function importVault() {
-  const file = document.createElement('input');
-  file.type = 'file';
-  file.accept = 'application/json';
-  file.onchange = async () => {
-    const f = file.files[0];
-    if (!f) return;
-    const text = await f.text();
-    const data = JSON.parse(text);
-    const pass = prompt('Enter password used to encrypt this export:');
-    if (!pass) return;
-    try {
-      const count = await DB.importVaultBlob(data, pass);
-      alert('Imported ' + count + ' notes');
-      await refreshNotesList();
-    } catch (e) {
-      alert('Failed to import: ' + e);
-    }
-  };
-  file.click();
-}
-
-async function openMindMap() {
-  toggleModal('#mindmap-modal', true);
-  await renderMindMap();
-}
+// ---- MODALIZED MINDMAP ----
 
 async function renderMindMap() {
-  const svg = $('#mindmap');
+  const svg = document.getElementById('mindmap');
   if (!svg) return;
   svg.innerHTML = '';
   const notes = await DB.listNotes();
@@ -455,15 +413,15 @@ async function renderMindMap() {
     g.appendChild(circle);
     g.appendChild(text);
     g.addEventListener('click', async () => {
-      toggleModal('#mindmap-modal', false);
+      closeModal();
       await loadNote(node.id);
     });
     svg.appendChild(g);
   }
 }
 
-async function onTimelineZoom(e) {
-  const el = $('#timeline');
+async function onTimelineZoom() {
+  const el = document.getElementById('timeline');
   if (!el) return;
   el.innerHTML = '';
   const notes = await DB.listNotes();
@@ -471,7 +429,7 @@ async function onTimelineZoom(e) {
     const item = document.createElement('div');
     item.style.padding = '8px'; item.style.marginBottom='6px'; item.style.borderLeft='4px solid var(--primary)';
     item.innerHTML = `<strong>${n.title}</strong><div style="font-size:12px;color:var(--muted)">${new Date(n.meta.created).toLocaleString()}</div>`;
-    item.addEventListener('click', () => { toggleModal('#timeline-modal', false); loadNote(n.id); });
+    item.addEventListener('click', () => { closeModal(); loadNote(n.id); });
     el.appendChild(item);
   }
 }
@@ -480,19 +438,28 @@ async function onTimelineZoom(e) {
 
 async function refreshRSAUI() {
   const kp = await CryptoAPI.getRSAKeypairFromStorage();
+  const keyStatus = document.getElementById('key-status');
   const rsaBanner = $('#rsa-banner');
-  const keyStatus = $('#key-status');
-  if (kp && kp.public) {
-    if (rsaBanner) rsaBanner.classList.remove('hidden');
-    if (keyStatus) keyStatus.textContent = 'RSA keys present in browser storage.';
-  } else {
-    if (rsaBanner) rsaBanner.classList.add('hidden');
-    if (keyStatus) keyStatus.textContent = 'No RSA keys present.';
+  // Banner in main UI
+  if (rsaBanner) {
+    if (kp && kp.public) {
+      rsaBanner.classList.remove('hidden');
+    } else {
+      rsaBanner.classList.add('hidden');
+    }
+  }
+  // Modal status
+  if (keyStatus) {
+    if (kp && kp.public) {
+      keyStatus.textContent = 'RSA keys present in browser storage.';
+    } else {
+      keyStatus.textContent = 'No RSA keys present.';
+    }
   }
 }
 
 async function onGenerateKeys() {
-  const keyStatus = $('#key-status');
+  const keyStatus = document.getElementById('key-status');
   if (!confirm('Generate a new RSA-4096 keypair locally? The private key will be stored in browser storage. Export it if you want a backup.')) return;
   if (keyStatus) keyStatus.textContent = 'Generating keys... (may take 10-20 seconds)';
   try {
@@ -537,7 +504,5 @@ async function onDeleteKeys() {
   alert('RSA keys removed from browser storage.');
   await refreshRSAUI();
 }
-
-// ---------- end key management ----------
 
 window.addEventListener('DOMContentLoaded', init);
