@@ -76,62 +76,16 @@
         </div>
       </aside>
     </main>
-
-    <!-- MODALS (Hidden by default) -->
-
-    <!-- QR Code Modal -->
-    <div id="qr-modal" class="modal hidden">
-      <div class="modal-content">
-        <h3>Share Note via QR Code</h3>
-        <canvas id="qr-canvas"></canvas>
-        <button id="close-qr" class="btn">Close</button>
-      </div>
-    </div>
-
-    <!-- Mindmap Modal -->
-    <div id="mindmap-modal" class="modal hidden">
-      <div class="modal-content fullsize">
-        <div class="mindmap-toolbar">
-          <button id="mindmap-close" class="btn">Close</button>
-          <button id="mindmap-refresh" class="btn">Refresh</button>
-        </div>
-        <svg id="mindmap" width="100%" height="100%"></svg>
-      </div>
-    </div>
-
-    <!-- Timeline Modal -->
-    <div id="timeline-modal" class="modal hidden">
-      <div class="modal-content fullsize">
-        <div class="timeline-toolbar">
-          <button id="timeline-close" class="btn">Close</button>
-          <input id="timeline-range" type="range" min="1" max="100" value="50" title="Zoom (not implemented)" />
-        </div>
-        <div id="timeline" class="timeline"></div>
-      </div>
-    </div>
-    
-    <!-- Key Management Modal (Added) -->
-    <div id="keys-modal" class="modal hidden">
-        <div class="modal-content">
-            <h3>RSA Key Management</h3>
-            <p id="key-status">No RSA keys found.</p>
-            <div class="key-actions">
-                <button id="generate-keys-btn" class="btn primary">Generate New Keys</button>
-                <button id="import-keys-btn" class="btn">Import Keys</button>
-                <button id="export-keys-btn" class="btn">Export Keys</button>
-                <button id="delete-keys-btn" class="btn danger">Delete Keys</button>
-            </div>
-            <button id="close-keys" class="btn">Close</button>
-        </div>
-    </div>
-
   </div>
+
+  <!-- Modal Container for single managed modal -->
+  <div id="modal-container"></div>
 
   <!-- Application Scripts -->
   <script type="module" src="crypto.js"></script>
   <script type="module" src="db.js"></script>
   <script type="module" src="qr.js"></script>
+  <script type="module" src="modal.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
-
