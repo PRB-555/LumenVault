@@ -1,0 +1,86 @@
+:root {
+  --teal: #08D9D6;
+  --dark: #252A34;
+  --pink: #FF2E63;
+  --light: #EAEAEA;
+
+  /* Dynamic theme vars */
+  --bg: var(--light);
+  --text: var(--dark);
+  --header: var(--dark);
+  --button-bg: var(--teal);
+  --button-hover: var(--pink);
+}
+
+body.dark {
+  --bg: var(--dark);
+  --text: var(--light);
+  --header: var(--light);
+}
+
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  transition: background 0.3s, color 0.3s;
+}
+
+/* Headers */
+h1, h2, h3 {
+  color: var(--header);
+}
+
+/* Buttons */
+button {
+  background: var(--button-bg);
+  color: var(--dark);
+  border: none;
+  padding: 8px 14px;
+  margin: 6px 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.3s;
+}
+button:hover {
+  background: var(--button-hover);
+  color: #fff;
+}
+
+/* Input fields */
+input, textarea, select {
+  border: 1px solid #ccc;
+  padding: 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* RSA banner warning */
+.rsa-banner {
+  background: #FFF9E6;
+  border-left: 4px solid var(--pink);
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--dark);
+}
+.rsa-banner.hidden {
+  display: none;
+}
+
+/* Zen mode editor */
+.zen-mode {
+  width: 100%;
+  height: 100vh;
+  resize: none;
+  border: none;
+  font-size: 18px;
+  line-height: 1.6;
+  padding: 24px;
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+}
