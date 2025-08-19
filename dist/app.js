@@ -1,4 +1,3 @@
-// app.js
 import { CryptoAPI } from './crypto.js';
 import { DB } from './db.js';
 import { QR } from './qr.js';
@@ -20,7 +19,8 @@ async function init() {
 
   // Clipboard monitor state
   const clipState = await localforage.getItem('clipboardMonitor') || false;
-  $('#clipboard-monitor').checked = clipState;
+  const clipboardMonitor = $('#clipboard-monitor');
+  if (clipboardMonitor) clipboardMonitor.checked = clipState;
   if (clipState) startClipboardMonitor();
 
   // RSA banner
@@ -34,86 +34,89 @@ function applyTheme(mode) {
 }
 
 function setupListeners() {
-  $('#theme-toggle').addEventListener('click', () => {
-    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
-    applyTheme(dark ? 'light' : 'dark');
-  });
-
-  $('#new-note-btn').addEventListener('click', newNote);
-  $('#save-note-btn').addEventListener('click', saveNote);
-  $('#delete-note-btn').addEventListener('click', deleteCurrentNote);
-  $('#qr-share-btn').addEventListener('click', onShareQR);
-  $('#export-note-btn').addEventListener('click', onExportNoteHTML);
-  $('#open-mindmap').addEventListener('click', openMindMap);
-  $('#mindmap-close').addEventListener('click', () => toggleModal('#mindmap-modal', false));
-  $('#mindmap-refresh').addEventListener('click', renderMindMap);
-  $('#open-timeline').addEventListener('click', () => toggleModal('#timeline-modal', true));
-  $('#timeline-close').addEventListener('click', () => toggleModal('#timeline-modal', false));
-  $('#timeline-range').addEventListener('input', onTimelineZoom);
-
-  $('#zen-toggle').addEventListener('click', () => {
-    document.body.classList.toggle('zen');
-    const el = document.getElementById('editor');
-    if (document.body.classList.contains('zen')) {
-      el.requestFullscreen?.();
-      el.classList.add('zen-mode');
-    } else {
-      document.exitFullscreen?.();
-      el.classList.remove('zen-mode');
-    }
-  });
-
-  $('#export-vault-btn').addEventListener('click', exportVault);
-  $('#import-vault-btn').addEventListener('click', importVault);
-
-  $('#close-qr').addEventListener('click', () => toggleModal('#qr-modal', false));
-  $('#clipboard-monitor').addEventListener('change', async (e) => {
-    // try to request permission gracefully
-    const enabled = e.target.checked;
-    if (enabled) {
-      try {
-        // Permissions API: query for clipboard-read
-        if (navigator.permissions && navigator.permissions.query) {
-          const perm = await navigator.permissions.query({ name: 'clipboard-read' });
-          if (perm.state === 'denied') {
-            alert('Clipboard access denied by browser. Please allow clipboard access for clipboard monitor to work.');
+  const listeners = [
+    ['#theme-toggle', 'click', () => {
+      const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      applyTheme(dark ? 'light' : 'dark');
+    }],
+    ['#new-note-btn', 'click', newNote],
+    ['#save-note-btn', 'click', saveNote],
+    ['#delete-note-btn', 'click', deleteCurrentNote],
+    ['#qr-share-btn', 'click', onShareQR],
+    ['#export-note-btn', 'click', onExportNoteHTML],
+    ['#open-mindmap', 'click', openMindMap],
+    ['#mindmap-close', 'click', () => toggleModal('#mindmap-modal', false)],
+    ['#mindmap-refresh', 'click', renderMindMap],
+    ['#open-timeline', 'click', () => toggleModal('#timeline-modal', true)],
+    ['#timeline-close', 'click', () => toggleModal('#timeline-modal', false)],
+    ['#timeline-range', 'input', onTimelineZoom],
+    ['#zen-toggle', 'click', () => {
+      document.body.classList.toggle('zen');
+      const el = document.getElementById('editor');
+      if (el) {
+        if (document.body.classList.contains('zen')) {
+          el.requestFullscreen?.();
+          el.classList.add('zen-mode');
+        } else {
+          document.exitFullscreen?.();
+          el.classList.remove('zen-mode');
+        }
+      }
+    }],
+    ['#export-vault-btn', 'click', exportVault],
+    ['#import-vault-btn', 'click', importVault],
+    ['#close-qr', 'click', () => toggleModal('#qr-modal', false)],
+    ['#clipboard-monitor', 'change', async (e) => {
+      if (!e) return;
+      // try to request permission gracefully
+      const enabled = e.target.checked;
+      if (enabled) {
+        try {
+          if (navigator.permissions && navigator.permissions.query) {
+            const perm = await navigator.permissions.query({ name: 'clipboard-read' });
+            if (perm.state === 'denied') {
+              alert('Clipboard access denied by browser. Please allow clipboard access for clipboard monitor to work.');
+              e.target.checked = false;
+              await localforage.setItem('clipboardMonitor', false);
+              return;
+            }
+            // if prompt or granted, proceed; some browsers still require user gesture to read
+          }
+          await localforage.setItem('clipboardMonitor', true);
+          startClipboardMonitor();
+        } catch (err) {
+          // Some browsers throw when querying clipboard permission — fallback to trying to read once
+          try {
+            await navigator.clipboard.readText();
+            await localforage.setItem('clipboardMonitor', true);
+            startClipboardMonitor();
+          } catch (err2) {
+            alert('Clipboard monitor requires user permission. Please enable clipboard access or disable the monitor.');
             e.target.checked = false;
             await localforage.setItem('clipboardMonitor', false);
             return;
           }
-          // if prompt or granted, proceed; some browsers still require user gesture to read
         }
-        await localforage.setItem('clipboardMonitor', true);
-        startClipboardMonitor();
-      } catch (err) {
-        // Some browsers throw when querying clipboard permission — fallback to trying to read once
-        try {
-          await navigator.clipboard.readText();
-          await localforage.setItem('clipboardMonitor', true);
-          startClipboardMonitor();
-        } catch (err2) {
-          alert('Clipboard monitor requires user permission. Please enable clipboard access or disable the monitor.');
-          e.target.checked = false;
-          await localforage.setItem('clipboardMonitor', false);
-          return;
-        }
+      } else {
+        await localforage.setItem('clipboardMonitor', false);
+        stopClipboardMonitor();
       }
-    } else {
-      await localforage.setItem('clipboardMonitor', false);
-      stopClipboardMonitor();
-    }
-  });
+    }],
+    ['#search', 'input', refreshNotesList],
+    // Key modal wiring
+    ['#open-keys-btn', 'click', () => toggleModal('#keys-modal', true)],
+    ['#close-keys', 'click', () => toggleModal('#keys-modal', false)],
+    ['#generate-keys-btn', 'click', onGenerateKeys],
+    ['#export-keys-btn', 'click', onExportKeys],
+    ['#import-keys-btn', 'click', onImportKeys],
+    ['#delete-keys-btn', 'click', onDeleteKeys],
+    ['#rsa-export-inline', 'click', onExportKeys]
+  ];
 
-  $('#search').addEventListener('input', refreshNotesList);
-
-  // Key modal wiring
-  $('#open-keys-btn').addEventListener('click', () => toggleModal('#keys-modal', true));
-  $('#close-keys').addEventListener('click', () => toggleModal('#keys-modal', false));
-  $('#generate-keys-btn').addEventListener('click', onGenerateKeys);
-  $('#export-keys-btn').addEventListener('click', onExportKeys);
-  $('#import-keys-btn').addEventListener('click', onImportKeys);
-  $('#delete-keys-btn').addEventListener('click', onDeleteKeys);
-  $('#rsa-export-inline').addEventListener('click', onExportKeys);
+  for (const [sel, evt, handler] of listeners) {
+    const el = $(sel);
+    if (el) el.addEventListener(evt, handler);
+  }
 }
 
 let clipboardInterval = null;
@@ -139,9 +142,9 @@ function startClipboardMonitor() {
         await refreshNotesList();
       }
     } catch (e) {
-      // permission or API not available — stop monitoring and inform user
       stopClipboardMonitor();
-      $('#clipboard-monitor').checked = false;
+      const clipboardMonitor = $('#clipboard-monitor');
+      if (clipboardMonitor) clipboardMonitor.checked = false;
       localforage.setItem('clipboardMonitor', false);
       console.warn('Clipboard monitor stopped due to permission error or unsupported API.');
     }
@@ -155,17 +158,23 @@ function stopClipboardMonitor() {
 let currentNoteId = null;
 
 async function newNote() {
-  $('#note-title').value = '';
-  $('#editor').value = '';
-  $('#note-passphrase').value = '';
+  const noteTitle = $('#note-title');
+  const editor = $('#editor');
+  const notePassphrase = $('#note-passphrase');
+  const status = $('#status');
+  if (noteTitle) noteTitle.value = '';
+  if (editor) editor.value = '';
+  if (notePassphrase) notePassphrase.value = '';
   currentNoteId = null;
-  $('#status').textContent = 'New note';
+  if (status) status.textContent = 'New note';
 }
 
 async function refreshNotesList() {
-  const q = $('#search').value.trim().toLowerCase();
+  const search = $('#search');
+  const q = search ? search.value.trim().toLowerCase() : '';
   const notes = await DB.listNotes();
   const list = $('#notes-list');
+  if (!list) return;
   list.innerHTML = '';
   for (const n of notes) {
     const title = n.title || '(untitled)';
@@ -183,24 +192,28 @@ async function loadNote(id) {
   const n = await DB.getNote(id);
   if (!n) return;
   currentNoteId = id;
+  const noteTitle = $('#note-title');
+  const editor = $('#editor');
+  const status = $('#status');
   if (n.content && (n.content.algo === 'AES-GCM' || n.content.algo === 'RSA-HYBRID')) {
-    $('#note-title').value = n.title;
-    $('#editor').value = '[ENCRYPTED — enter passphrase (if used) or unlock manually then Save to decrypt]';
-    $('#status').textContent = `Encrypted (${n.content.algo})`;
+    if (noteTitle) noteTitle.value = n.title;
+    if (editor) editor.value = '[ENCRYPTED — enter passphrase (if used) or unlock manually then Save to decrypt]';
+    if (status) status.textContent = `Encrypted (${n.content.algo})`;
   } else if (n.content && n.content.plain) {
-    $('#note-title').value = n.title;
-    $('#editor').value = n.content.plain;
-    $('#status').textContent = 'Loaded (plain)';
+    if (noteTitle) noteTitle.value = n.title;
+    if (editor) editor.value = n.content.plain;
+    if (status) status.textContent = 'Loaded (plain)';
   } else {
-    $('#note-title').value = n.title;
-    $('#editor').value = '';
-    $('#status').textContent = 'Loaded';
+    if (noteTitle) noteTitle.value = n.title;
+    if (editor) editor.value = '';
+    if (status) status.textContent = 'Loaded';
   }
   renderNoteMeta(n);
 }
 
 function renderNoteMeta(n) {
   const meta = $('#note-meta');
+  if (!meta) return;
   meta.innerHTML = `
     <div><strong>Title:</strong> ${n.title||'(untitled)'}</div>
     <div><strong>Created:</strong> ${new Date(n.meta.created).toLocaleString()}</div>
@@ -211,10 +224,17 @@ function renderNoteMeta(n) {
 }
 
 async function saveNote() {
-  const title = $('#note-title').value.trim() || 'Untitled';
-  const contentText = $('#editor').value;
-  const passphrase = $('#note-passphrase').value.trim();
-  const mode = $('#encryption-mode').value;
+  const noteTitle = $('#note-title');
+  const editor = $('#editor');
+  const notePassphrase = $('#note-passphrase');
+  const encryptionMode = $('#encryption-mode');
+  const status = $('#status');
+  if (!noteTitle || !editor || !encryptionMode) return;
+
+  const title = noteTitle.value.trim() || 'Untitled';
+  const contentText = editor.value;
+  const passphrase = notePassphrase ? notePassphrase.value.trim() : '';
+  const mode = encryptionMode.value;
 
   // Smart links detection: find [[...]] references into tags/backlinks
   const linked = Array.from(contentText.matchAll(/\[\[([^\]]+)\]\]/g)).map(m => m[1].trim());
@@ -236,7 +256,6 @@ async function saveNote() {
       const enc = await CryptoAPI.encryptNoteRSAHybrid(contentText, pub);
       contentObj = enc;
     } else {
-      // fallback and warn
       alert('No RSA public key found. Use Key Management to generate/import keys, or switch encryption mode.');
       return;
     }
@@ -249,18 +268,19 @@ async function saveNote() {
   }
 
   const now = Date.now();
+  const existingNote = currentNoteId ? await DB.getNote(currentNoteId) : null;
   const note = {
     id: currentNoteId || uid('note'),
     title,
     content: contentObj,
     meta: {
-      created: currentNoteId ? ( (await DB.getNote(currentNoteId)).meta.created ) : now,
+      created: currentNoteId && existingNote ? existingNote.meta.created : now,
       modified: now,
       tags
     }
   };
   await DB.saveNote(note);
-  $('#status').textContent = 'Saved';
+  if (status) status.textContent = 'Saved';
   await refreshNotesList();
   renderNoteMeta(note);
 }
@@ -269,10 +289,13 @@ async function deleteCurrentNote() {
   if (!currentNoteId) return;
   await DB.deleteNote(currentNoteId);
   currentNoteId = null;
-  $('#note-title').value = '';
-  $('#editor').value = '';
+  const noteTitle = $('#note-title');
+  const editor = $('#editor');
+  const status = $('#status');
+  if (noteTitle) noteTitle.value = '';
+  if (editor) editor.value = '';
   await refreshNotesList();
-  $('#status').textContent = 'Deleted';
+  if (status) status.textContent = 'Deleted';
 }
 
 function toggleModal(sel, show) {
@@ -292,7 +315,7 @@ async function onShareQR() {
   const payload = JSON.stringify({ meta: note.meta, content: note.content, title: note.title });
   const b64 = btoa(unescape(encodeURIComponent(payload)));
   const canvas = $('#qr-canvas');
-  QR.renderToCanvas(b64, canvas, 4);
+  if (canvas) QR.renderToCanvas(b64, canvas, 4);
   toggleModal('#qr-modal', true);
 }
 
@@ -379,6 +402,7 @@ async function openMindMap() {
 
 async function renderMindMap() {
   const svg = $('#mindmap');
+  if (!svg) return;
   svg.innerHTML = '';
   const notes = await DB.listNotes();
   const cx = svg.clientWidth/2 || 400;
@@ -440,6 +464,7 @@ async function renderMindMap() {
 
 async function onTimelineZoom(e) {
   const el = $('#timeline');
+  if (!el) return;
   el.innerHTML = '';
   const notes = await DB.listNotes();
   for (const n of notes) {
@@ -455,24 +480,27 @@ async function onTimelineZoom(e) {
 
 async function refreshRSAUI() {
   const kp = await CryptoAPI.getRSAKeypairFromStorage();
+  const rsaBanner = $('#rsa-banner');
+  const keyStatus = $('#key-status');
   if (kp && kp.public) {
-    $('#rsa-banner').classList.remove('hidden');
-    $('#key-status').textContent = 'RSA keys present in browser storage.';
+    if (rsaBanner) rsaBanner.classList.remove('hidden');
+    if (keyStatus) keyStatus.textContent = 'RSA keys present in browser storage.';
   } else {
-    $('#rsa-banner').classList.add('hidden');
-    if ($('#key-status')) $('#key-status').textContent = 'No RSA keys present.';
+    if (rsaBanner) rsaBanner.classList.add('hidden');
+    if (keyStatus) keyStatus.textContent = 'No RSA keys present.';
   }
 }
 
 async function onGenerateKeys() {
+  const keyStatus = $('#key-status');
   if (!confirm('Generate a new RSA-4096 keypair locally? The private key will be stored in browser storage. Export it if you want a backup.')) return;
-  $('#key-status').textContent = 'Generating keys... (may take 10-20 seconds)';
+  if (keyStatus) keyStatus.textContent = 'Generating keys... (may take 10-20 seconds)';
   try {
-    const exported = await CryptoAPI.generateAndStoreRSAKeypair();
-    $('#key-status').textContent = 'Keypair generated and stored locally. Please Export Keys to backup.';
+    await CryptoAPI.generateAndStoreRSAKeypair();
+    if (keyStatus) keyStatus.textContent = 'Keypair generated and stored locally. Please Export Keys to backup.';
     await refreshRSAUI();
   } catch (e) {
-    $('#key-status').textContent = 'Key generation failed: ' + e;
+    if (keyStatus) keyStatus.textContent = 'Key generation failed: ' + e;
   }
 }
 
