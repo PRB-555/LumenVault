@@ -14,6 +14,7 @@ const ASSETS = [
   '/manifest.json',
   'localforage.min.js',   
   'jszip.min.js',
+  'qrcode.min.js',
 ];
 
 // Install - cache app shell
