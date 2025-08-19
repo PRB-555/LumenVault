@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Savant Journal — Privacy Vault</title>
+  <script src="./localforage.min.js"></script>
+  <script src="./jszip.min.js"></script>
+  <script src="./qrcode.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app" class="app">
+    <header class="topbar">
+      <h1 id="app-title">Savant Journal</h1>
+      <div class="top-controls">
+        <button id="new-note-btn" class="btn primary">New</button>
+        <button id="export-vault-btn" class="btn">Backup Vault</button>
+        <button id="import-vault-btn" class="btn">Restore Vault</button>
+        <button id="theme-toggle" class="btn">Toggle Theme</button>
+        <label class="toggle">
+          <input id="clipboard-monitor" type="checkbox" />
+          <span>Clipboard Monitor</span>
+        </label>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <div class="search-area">
+          <input id="search" placeholder="Search or type tags..." />
+        </div>
+
+        <div id="notes-list" class="notes-list"></div>
+
+        <div class="sidebar-footer">
+          <button id="open-mindmap" class="btn">Mind Map</button>
+          <button id="open-timeline" class="btn">Timeline</button>
+        </div>
+      </aside>
+
+      <section class="editor-area">
+        <div class="editor-header">
+          <input id="note-title" class="title-input" placeholder="Note title" />
+          <div class="header-actions">
+            <select id="encryption-mode" title="Encryption mode">
+              <option value="aes">AES-GCM (fast)</option>
+              <option value="rsa">RSA Hybrid</option>
+              <option value="chacha">ChaCha20 (if available)</option>
+            </select>
+            <input id="note-passphrase" placeholder="Optional note passphrase" />
+            <button id="lock-note-btn" class="btn">Lock</button>
+            <button id="qr-share-btn" class="btn">Share (QR)</button>
+            <button id="export-note-btn" class="btn">Export HTML</button>
+            <button id="zen-toggle" class="btn">Zen</button>
+          </div>
+        </div>
+
+        <textarea id="editor" class="editor" placeholder="Write your note here..."></textarea>
+
+        <div class="editor-footer">
+          <button id="save-note-btn" class="btn primary">Save</button>
+          <button id="delete-note-btn" class="btn">Delete</button>
+          <div class="status" id="status">—</div>
+        </div>
+
+        <div id="qr-modal" class="modal hidden">
+          <div class="modal-content">
+            <canvas id="qr-canvas"></canvas>
+            <button id="close-qr" class="btn">Close</button>
+          </div>
+        </div>
+
+      </section>
+
+      <aside class="rightpanel">
+        <h3>Note Details</h3>
+        <div id="note-meta"></div>
+      </aside>
+    </main>
+
+    <!-- Mindmap container hidden until opened -->
+    <div id="mindmap-modal" class="modal hidden">
+      <div class="modal-content fullsize">
+        <div class="mindmap-toolbar">
+          <button id="mindmap-close" class="btn">Close</button>
+          <button id="mindmap-refresh" class="btn">Refresh</button>
+        </div>
+        <svg id="mindmap" width="100%" height="100%"></svg>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div id="timeline-modal" class="modal hidden">
+      <div class="modal-content fullsize">
+        <div class="timeline-toolbar">
+          <button id="timeline-close" class="btn">Close</button>
+          <input id="timeline-range" type="range" min="1" max="100" value="50" />
+        </div>
+        <div id="timeline" class="timeline"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script type="module" src="crypto.js"></script>
+  <script type="module" src="db.js"></script>
+  <script type="module" src="qr.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
